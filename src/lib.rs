@@ -5,14 +5,6 @@ use std::collections::HashSet;
 #[derive(Debug, PartialEq)]
 struct Error {}
 
-/// Check whether a variable name is a proper identifier.
-fn is_identifier(s: &str) -> bool {
-    lazy_static! {
-        static ref IDENTIFIER: Regex = Regex::new(r"^[^\d\W]\w*$").unwrap();
-    }
-    IDENTIFIER.is_match(s)
-}
-
 #[derive(Debug)]
 struct Step {
     s: String,
@@ -40,6 +32,14 @@ impl Step {
             variables_re,
         })
     }
+}
+
+/// Check whether a variable name is a proper identifier.
+fn is_identifier(s: &str) -> bool {
+    lazy_static! {
+        static ref IDENTIFIER: Regex = Regex::new(r"^[^\d\W]\w*$").unwrap();
+    }
+    IDENTIFIER.is_match(s)
 }
 
 fn get_parts(generalized: &str) -> Result<Vec<String>, Error> {
