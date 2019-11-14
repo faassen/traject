@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
+use std::cmp::Ordering;
 use std::collections::HashSet;
 
 #[derive(Debug, PartialEq)]
@@ -42,6 +43,52 @@ impl Step {
                 .map(|entry| entry.expect("match not matched").as_str())
                 .collect()
         })
+    }
+}
+
+impl Clone for Step {
+    fn clone(&self) -> Self {
+        Self::new(&self.s).unwrap()
+    }
+}
+
+impl PartialEq for Step {
+    fn eq(&self, other: &Self) -> bool {
+        self.s == other.s
+    }
+}
+
+impl Eq for Step {}
+
+impl Ord for Step {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // if we have the same non-variable parts, we should be the same
+        // (otherwise it's a conflict)
+        if self.parts == other.parts {
+            return Ordering::Equal;
+        }
+        // if we can absorb the other's variables we sort after it,
+        // we'd have less hardcoded and more variables
+        if self.variables_re.is_match(&other.s) {
+            return Ordering::Greater;
+        }
+        // we sort before other if other's variables can absorb us,
+        // this means we have less variables and more hardcoded.
+        if other.variables_re.is_match(&self.s) {
+            return Ordering::Less;
+        }
+        // otherwise the more parts we are, the more specific we sort
+        if self.parts > other.parts {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        }
+    }
+}
+
+impl PartialOrd for Step {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -223,6 +270,28 @@ mod tests {
             step.match_segment("startAmiddleBend").unwrap(),
             vec!["A", "B"]
         );
+    }
+
+    fn sorted_steps(l: Vec<&str>) -> Vec<String> {
+        let mut steps: Vec<Step> = l.iter().map(|s| Step::new(s).unwrap()).collect();
+        steps.sort();
+        steps.into_iter().map(|step| step.s).collect()
+    }
+
+    #[test]
+    fn test_order_prefix_earlier() {
+        assert_eq!(
+            sorted_steps(vec!["{foo}", "prefix{foo}"]),
+            vec!["prefix{foo}", "{foo}"]
+        )
+    }
+
+    #[test]
+    fn test_order_postfix_earlier() {
+        assert_eq!(
+            sorted_steps(vec!["{foo}", "{foo}postfix"]),
+            vec!["{foo}postfix", "{foo}"]
+        )
     }
 
     // proptest! {
