@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
-use regex::Regex;
+use regex::{Captures, Regex};
+use std::collections::HashSet;
 
 #[derive(Debug, PartialEq)]
 struct Error {}
@@ -18,7 +19,7 @@ struct Step {
     generalized: String,
     parts: Vec<String>,
     names: Vec<String>,
-    // variables_re: Regex,
+    variables_re: Regex,
 }
 
 impl Step {
@@ -28,26 +29,62 @@ impl Step {
         }
         let generalized = PATH_VARIABLE.replace_all(s, "{}").to_string();
 
-        let parts: Vec<String> = generalized.split("{}").map(String::from).collect();
+        let parts = get_parts(&generalized)?;
+        let names = get_names(&PATH_VARIABLE, &s)?;
+        let variables_re = get_variables_re(&PATH_VARIABLE, &s);
+        Ok(Step {
+            s: s.to_owned(),
+            generalized,
+            parts,
+            names,
+            variables_re,
+        })
+    }
+}
 
-        let names: Vec<String> = PATH_VARIABLE
-            .find_iter(s)
-            .map(|m| m.as_str())
-            .map(|s| s[1..s.len() - 1].to_string())
-            .collect();
+fn get_parts(generalized: &str) -> Result<Vec<String>, Error> {
+    let parts: Vec<String> = generalized.split("{}").map(String::from).collect();
 
-        for name in &names {
-            if !is_identifier(&name) {
+    if parts.len() > 1 {
+        for part in &parts[1..parts.len() - 1] {
+            if part == "" {
+                // Cannot have consecutive variables
                 return Err(Error {});
             }
         }
-        Ok(Step {
-            s: s.to_owned(),
-            generalized: generalized,
-            parts,
-            names,
-        })
     }
+
+    Ok(parts)
+}
+
+fn get_names(variable_regex: &Regex, s: &str) -> Result<Vec<String>, Error> {
+    let names: Vec<String> = variable_regex
+        .find_iter(s)
+        .map(|m| m.as_str())
+        .map(|s| s[1..s.len() - 1].to_string())
+        .collect();
+
+    let mut name_set = HashSet::new();
+    for name in &names {
+        if !is_identifier(&name) {
+            // illegal variable identifier
+            return Err(Error {});
+        }
+        if !name_set.insert(name) {
+            // duplicate variable
+            return Err(Error {});
+        }
+    }
+    Ok(names)
+}
+
+fn get_variables_re(variable_regex: &Regex, s: &str) -> Regex {
+    let variables_re = variable_regex
+        .replace_all(s, |caps: &Captures| {
+            format!("(?P<{}>.+)", &caps[0][1..caps[0].len() - 1])
+        })
+        .to_string();
+    Regex::new(&variables_re).unwrap()
 }
 
 #[cfg(test)]
@@ -122,6 +159,18 @@ mod tests {
     #[test]
     fn test_step_bad_variable() {
         let step = Step::new("foo{%$}baz");
+        assert!(step.is_err());
+    }
+
+    #[test]
+    fn test_step_duplicate_variable() {
+        let step = Step::new("foo{bar}baz{bar}");
+        assert!(step.is_err());
+    }
+
+    #[test]
+    fn test_step_consecutive_variables() {
+        let step = Step::new("{bar}{baz}");
         assert!(step.is_err());
     }
 
