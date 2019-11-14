@@ -54,6 +54,12 @@ fn get_parts(generalized: &str) -> Result<Vec<String>, Error> {
         }
     }
 
+    for part in &parts {
+        if part.contains("{") || part.contains("}") {
+            // Invalid step
+            return Err(Error {});
+        }
+    }
     Ok(parts)
 }
 
@@ -171,6 +177,18 @@ mod tests {
     #[test]
     fn test_step_consecutive_variables() {
         let step = Step::new("{bar}{baz}");
+        assert!(step.is_err());
+    }
+
+    #[test]
+    fn test_invalid_step_only_open() {
+        let step = Step::new("{bar");
+        assert!(step.is_err());
+    }
+
+    #[test]
+    fn test_invalid_step_only_close() {
+        let step = Step::new("bar}");
         assert!(step.is_err());
     }
 
