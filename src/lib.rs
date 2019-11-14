@@ -32,6 +32,17 @@ impl Step {
             variables_re,
         })
     }
+
+    /// match path segment, return names
+    fn match_segment<'a>(&self, s: &'a str) -> Option<Vec<&'a str>> {
+        // XXX how to make converter-driven matching work?
+        self.variables_re.captures(s).map(|c| {
+            c.iter()
+                .skip(1)
+                .map(|entry| entry.expect("match not matched").as_str())
+                .collect()
+        })
+    }
 }
 
 /// Check whether a variable name is a proper identifier.
@@ -190,6 +201,28 @@ mod tests {
     fn test_invalid_step_only_close() {
         let step = Step::new("bar}");
         assert!(step.is_err());
+    }
+
+    #[test]
+    fn test_match_segment_no_variables() {
+        let step = Step::new("foo").unwrap();
+        assert!(step.match_segment("foo").is_some());
+        assert!(step.match_segment("bar").is_none());
+    }
+
+    #[test]
+    fn test_match_segment_one_variable() {
+        let step = Step::new("{bar}").unwrap();
+        assert_eq!(step.match_segment("foo").unwrap(), vec!["foo"]);
+    }
+
+    #[test]
+    fn test_match_segment_two_variables() {
+        let step = Step::new("start{a}middle{b}end").unwrap();
+        assert_eq!(
+            step.match_segment("startAmiddleBend").unwrap(),
+            vec!["A", "B"]
+        );
     }
 
     // proptest! {
